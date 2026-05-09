@@ -3,7 +3,7 @@ name: Deploy Frontend to Amazon ECR
 on:
   push:
     branches:
-      - main  # Se activa al hacer push a la rama principal
+      - main  # Se activa al hacer push a la rama principa
 
 jobs:
   build-and-deploy:
