@@ -1,0 +1,54 @@
+name: Deploy Frontend to Amazon ECR
+
+on:
+  push:
+    branches:
+      - main  # Se dispara al hacer push a la rama main de EVA2_FRONT
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descarga el código del repositorio (Dockerfile está en la raíz)
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # 2. Configura las credenciales de AWS usando tus Secrets
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # 3. Login en Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      # 4. Construir y subir la imagen (Path "." porque el Dockerfile está en el main)
+      - name: Build, Tag, and Push Image to ECR
+        env:
+          # El Registry es automático gracias al paso anterior (login-ecr)
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPO_URL_FRONT }}
+          IMAGE_TAG: latest
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      # 5. Desplegar en la instancia EC2 mediante SSM
+      - name: Deploy to EC2 via SSM
+        run: |
+          aws ssm send-command \
+            --instance-ids ${{ secrets.EC2_FRONT_INSTANCE_ID }} \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}",
+              "docker pull ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPO_URL_FRONT }}:latest",
+              "docker stop frontend-container || true",
+              "docker rm frontend-container || true",
+              "docker run -d --name frontend-container -p 80:80 ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPO_URL_FRONT }}:latest"
+            ]'
