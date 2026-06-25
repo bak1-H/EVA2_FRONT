@@ -18,8 +18,4 @@ COPY nginx-main.conf /etc/nginx/nginx.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Permisos para el usuario nginx (uid 101)
-RUN chown -R nginx:nginx /usr/share/nginx/html /tmp /var/cache/nginx
-
-USER nginx
-EXPOSE 8080
+EXPOSE 80
